@@ -125,3 +125,4 @@ with tab2:
 
                         st.warning(f"⚠️ Allergènes : {', '.join(r['allergenes'])}")
 
+
