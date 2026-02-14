@@ -12,11 +12,16 @@ except:
     # Ta clé Zo-4 pour tes tests locaux
     api_key = "AIzaSyBvvqOuMwFdgUH5T4GJlT0fS4i4Qnti8Gk"
 
+# --- CONFIGURATION GEMINI (FORCE) ---
 genai.configure(api_key=api_key)
 
-# CORRECTION FINALE : Utilisation du nom de modèle court pour éviter l'erreur 404
-# C'est la version la plus stable pour le quota gratuit
-model = genai.GenerativeModel('gemini-1.5-flash')
+# On tente de trouver le modèle par son nom court
+# C'est la syntaxe recommandée pour les versions récentes de google-generativeai
+try:
+    model = genai.GenerativeModel('gemini-1.5-flash')
+    # Test de sécurité : on force l'API v1beta si nécessaire
+except Exception:
+    model = genai.GenerativeModel('models/gemini-1.5-flash')
 
 st.set_page_config(page_title="Ma Cuisine Pro MP2I", layout="wide")
 st.title("📚 Assistant Recettes Gratuit")
@@ -126,4 +131,5 @@ with tab2:
                         st.write(f"**Ingrédients :** {', '.join(r['ingredients'])}")
                         if r.get('allergenes'):
                             st.warning(f"⚠️ Allergènes : {', '.join(r['allergenes'])}")
+
 
