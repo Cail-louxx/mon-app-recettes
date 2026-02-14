@@ -72,4 +72,57 @@ with tab1:
                         # Amélioration pour l'analyse de lien
                         response = model.generate_content(f"Extrais les informations de cette page web : {url_web}. {prompt}")
                     else:
-                        img = Image.open(file_
+                        img = Image.open(file_to_analyze)
+                        response = model.generate_content([prompt, img])
+                    
+                    # Nettoyage de la réponse pour extraire le JSON proprement
+                    raw_text = response.text.strip()
+                    if "```json" in raw_text:
+                        raw_text = raw_text.split("```json")[1].split("```")[0]
+                    elif "```" in raw_text:
+                        raw_text = raw_text.split("```")[1].split("```")[0]
+                    
+                    res = json.loads(raw_text)
+                    res["livre"] = nom_livre_final
+                    
+                    # Sauvegarde avec nom de fichier propre
+                    safe_name = "".join([c for c in res['nom'] if c.isalnum() or c==' ']).rstrip()
+                    with open(os.path.join(DB_PATH, f"{safe_name.replace(' ', '_')}.json"), "w") as f:
+                        json.dump(res, f)
+                    
+                    st.success(f"✅ '{res['nom']}' ajouté !")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Détails de l'erreur : {e}")
+
+with tab2:
+    st.header("Filtrer mes recettes")
+    all_books = get_all_books()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        s_nom = st.text_input("🔍 Rechercher par nom")
+        s_ing = st.text_input("🍎 Rechercher un ingrédient")
+    with col2:
+        s_livre = st.multiselect("📖 Filtrer par Livre(s)", all_books)
+        s_type = st.multiselect("🍴 Type de plat", ["Entrée", "Plat", "Dessert", "Gâteau"])
+
+    st.divider()
+
+    if os.path.exists(DB_PATH):
+        files = [f for f in os.listdir(DB_PATH) if f.endswith('.json')]
+        for file in files:
+            with open(os.path.join(DB_PATH, file), 'r') as f:
+                r = json.load(f)
+                
+                match_nom = s_nom.lower() in r['nom'].lower()
+                match_ing = not s_ing or any(s_ing.lower() in i.lower() for i in r['ingredients'])
+                match_livre = not s_livre or r.get('livre') in s_livre
+                match_type = not s_type or r.get('type') in s_type
+                
+                if match_nom and match_ing and match_livre and match_type:
+                    with st.expander(f"{r['nom']} ({r.get('type', 'Plat')}) — {r['temps']} min"):
+                        st.write(f"**Livre :** {r.get('livre', 'Non précisé')}")
+                        st.write(f"**Ingrédients :** {', '.join(r['ingredients'])}")
+                        if r.get('allergenes'):
+                            st.warning(f"⚠️ Allergènes : {', '.join(r['allergenes'])}")
