@@ -5,18 +5,16 @@ import google.generativeai as genai
 from PIL import Image
 
 # --- CONFIGURATION GEMINI (GRATUIT) ---
+# On utilise ta nouvelle clé directement pour le test
 api_key = "AIzaSyBvvqOuMwFdgUH5T4GJlT0fS4i4Qnti8Gk"
 
-# --- CONFIGURATION GEMINI (FORCE) ---
+# Configuration de l'API
 genai.configure(api_key=api_key)
 
-# On tente de trouver le modèle par son nom court
-# C'est la syntaxe recommandée pour les versions récentes de google-generativeai
-try:
-    model = genai.GenerativeModel('gemini-1.0-pro')
-    # Test de sécurité : on force l'API v1beta si nécessaire
-except Exception:
-    model = genai.GenerativeModel('models/gemini-1.5-flash')
+# SOLUTION FINALE : On définit le modèle ici. 
+# Si gemini-1.5-flash échoue, le bloc try/except dans le code d'analyse prendra le relais.
+model_name = 'gemini-1.5-flash'
+model = genai.GenerativeModel(model_name)
 
 st.set_page_config(page_title="Ma Cuisine Pro MP2I", layout="wide")
 st.title("📚 Assistant Recettes Gratuit")
@@ -68,14 +66,14 @@ with tab1:
                 'nom', 'ingredients' (liste), 'temps' (entier en minutes), 'type' (Entrée, Plat, Dessert ou Gâteau) et 'allergenes' (liste)."""
                 
                 try:
+                    # Tentative d'analyse
                     if source == "Lien Web":
-                        # Amélioration pour l'analyse de lien
-                        response = model.generate_content(f"Extrais les informations de cette page web : {url_web}. {prompt}")
+                        response = model.generate_content(f"Analyse ce lien : {url_web}. {prompt}")
                     else:
                         img = Image.open(file_to_analyze)
                         response = model.generate_content([prompt, img])
                     
-                    # Nettoyage de la réponse pour extraire le JSON proprement
+                    # Extraction du texte JSON
                     raw_text = response.text.strip()
                     if "```json" in raw_text:
                         raw_text = raw_text.split("```json")[1].split("```")[0]
@@ -85,49 +83,5 @@ with tab1:
                     res = json.loads(raw_text)
                     res["livre"] = nom_livre_final
                     
-                    # Sauvegarde avec nom de fichier propre
-                    safe_name = "".join([c for c in res['nom'] if c.isalnum() or c==' ']).rstrip()
-                    with open(os.path.join(DB_PATH, f"{safe_name.replace(' ', '_')}.json"), "w") as f:
-                        json.dump(res, f)
-                    
-                    st.success(f"✅ '{res['nom']}' ajouté !")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Détails de l'erreur : {e}")
-
-with tab2:
-    st.header("Filtrer mes recettes")
-    all_books = get_all_books()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        s_nom = st.text_input("🔍 Rechercher par nom")
-        s_ing = st.text_input("🍎 Rechercher un ingrédient")
-    with col2:
-        s_livre = st.multiselect("📖 Filtrer par Livre(s)", all_books)
-        s_type = st.multiselect("🍴 Type de plat", ["Entrée", "Plat", "Dessert", "Gâteau"])
-
-    st.divider()
-
-    if os.path.exists(DB_PATH):
-        files = [f for f in os.listdir(DB_PATH) if f.endswith('.json')]
-        for file in files:
-            with open(os.path.join(DB_PATH, file), 'r') as f:
-                r = json.load(f)
-                
-                match_nom = s_nom.lower() in r['nom'].lower()
-                match_ing = not s_ing or any(s_ing.lower() in i.lower() for i in r['ingredients'])
-                match_livre = not s_livre or r.get('livre') in s_livre
-                match_type = not s_type or r.get('type') in s_type
-                
-                if match_nom and match_ing and match_livre and match_type:
-                    with st.expander(f"{r['nom']} ({r.get('type', 'Plat')}) — {r['temps']} min"):
-                        st.write(f"**Livre :** {r.get('livre', 'Non précisé')}")
-                        st.write(f"**Ingrédients :** {', '.join(r['ingredients'])}")
-                        if r.get('allergenes'):
-                            st.warning(f"⚠️ Allergènes : {', '.join(r['allergenes'])}")
-
-
-
-
-
+                    # Sauvegarde
+                    safe_name = "".join([c for c in res['nom'] if c.isalnum() or c=='
