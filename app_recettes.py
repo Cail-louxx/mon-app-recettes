@@ -14,7 +14,7 @@ except:
 
 genai.configure(api_key=api_key)
 # Utilisation du nom complet du modèle pour éviter l'erreur NotFound
-model = genai.GenerativeModel('gemini-1.5-flash-latest')
+model = genai.GenerativeModel('gemini-1.5-flash')
 
 st.set_page_config(page_title="Ma Cuisine Pro MP2I", layout="wide")
 st.title("📚 Assistant Recettes Gratuit")
@@ -124,3 +124,4 @@ with tab2:
                     if r.get('allergenes'):
 
                         st.warning(f"⚠️ Allergènes : {', '.join(r['allergenes'])}")
+
