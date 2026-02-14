@@ -39,8 +39,8 @@ def get_all_books():
     return sorted(list(books))
 
 # --- 4. INTERFACE ---
-st.set_page_config(page_title="Ma Cuisine Pro MP2I", layout="wide")
-st.title("📚 Assistant Recettes Intelligent")
+st.set_page_config(page_title="Ma Cuisine Pro", layout="wide")
+st.title("👩🏻‍🍳 Assistant Recettes Intelligent")
 
 tab1, tab2 = st.tabs(["📥 Importer une Recette", "🔍 Ma Bibliothèque"])
 
@@ -136,3 +136,4 @@ with tab2:
                                 for i, etape in enumerate(r.get('etapes', []), 1):
                                     st.write(f"{i}. {etape}")
             except: continue
+
