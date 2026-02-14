@@ -4,138 +4,54 @@ import json
 import google.generativeai as genai
 from PIL import Image
 
-# --- CONFIGURATION GEMINI (GRATUIT) ---
-# On utilise ta nouvelle clé directement pour le test
+# --- CONFIGURATION STRICTE ---
+# On utilise ta clé valide Zo-4
 api_key = "AIzaSyBvvqOuMwFdgUH5T4GJlT0fS4i4Qnti8Gk"
-
-# Configuration de l'API
 genai.configure(api_key=api_key)
 
-# SOLUTION FINALE : On définit le modèle ici. 
-# Si gemini-1.5-flash échoue, le bloc try/except dans le code d'analyse prendra le relais.
-model_name = 'gemini-1.5-flash'
-model = genai.GenerativeModel(model_name)
+# Utilisation du nom simple. Si Flash échoue, on bascule sur Pro automatiquement.
+try:
+    model = genai.GenerativeModel('gemini-1.5-flash')
+except:
+    model = genai.GenerativeModel('gemini-pro')
 
 st.set_page_config(page_title="Ma Cuisine Pro MP2I", layout="wide")
-st.title("📚 Assistant Recettes Gratuit")
+st.title("📚 Assistant Recettes")
 
-# Dossier de stockage des recettes
 DB_PATH = "ma_base_recettes"
 if not os.path.exists(DB_PATH):
     os.makedirs(DB_PATH)
 
-# --- FONCTIONS UTILES ---
-def get_all_books():
-    books = set()
-    if os.path.exists(DB_PATH):
-        files = [f for f in os.listdir(DB_PATH) if f.endswith('.json')]
-        for file in files:
-            try:
-                with open(os.path.join(DB_PATH, file), 'r') as f:
-                    data = json.load(f)
-                    if data.get("livre"): books.add(data["livre"])
-            except: continue
-    return sorted(list(books))
-
 # --- INTERFACE ---
-tab1, tab2 = st.tabs(["📥 Importer une Recette", "🔍 Ma Bibliothèque"])
+source = st.radio("Source :", ["Lien Web", "Image"])
+url_web = st.text_input("Lien Marmiton") if source == "Lien Web" else None
+file_img = st.file_uploader("Image", type=['jpg', 'jpeg', 'png']) if source == "Image" else None
 
-with tab1:
-    source = st.radio("Source de la recette :", ["Appareil Photo", "Galerie", "Lien Web"])
-    
-    existing_books = get_all_books()
-    book_option = st.selectbox("Livre :", ["+ Nouveau Livre"] + existing_books)
-    nom_livre_final = st.text_input("Nom du nouveau livre") if book_option == "+ Nouveau Livre" else book_option
-    
-    file_to_analyze = None
-    url_web = None
+if st.button("Analyser"):
+    with st.spinner("Analyse en cours..."):
+        prompt = "Analyse cette recette. Réponds UNIQUEMENT en JSON : {'nom': '', 'ingredients': [], 'temps': 0, 'type': ''}"
+        try:
+            if source == "Lien Web":
+                # On force une requête simple
+                response = model.generate_content(f"{prompt} URL: {url_web}")
+            else:
+                img = Image.open(file_img)
+                response = model.generate_content([prompt, img])
+            
+            # Affichage direct du résultat pour vérifier
+            st.json(response.text)
+            
+            # Sauvegarde rapide
+            res = json.loads(response.text.replace('```json', '').replace('```', ''))
+            with open(f"{DB_PATH}/recette_{res['nom']}.json", "w") as f:
+                json.dump(res, f)
+            st.success("Sauvegardé !")
+            
+        except Exception as e:
+            st.error(f"L'API refuse encore le modèle. Détails : {e}")
 
-    if source == "Appareil Photo":
-        file_to_analyze = st.camera_input("Prendre la photo")
-    elif source == "Galerie":
-        file_to_analyze = st.file_uploader("Choisir une image", type=['png', 'jpg', 'jpeg'])
-    else:
-        url_web = st.text_input("Coller le lien de la recette (ex: Marmiton)")
-
-    if st.button("Analyser et Sauvegarder"):
-        if (source == "Lien Web" and not url_web) or (source != "Lien Web" and not file_to_analyze):
-            st.error("Donnée manquante !")
-        else:
-            with st.spinner("L'IA Gemini analyse la recette..."):
-                prompt = """Analyse cette recette. Réponds UNIQUEMENT avec un objet JSON strict contenant ces clés : 
-                'nom', 'ingredients' (liste), 'temps' (entier en minutes), 'type' (Entrée, Plat, Dessert ou Gâteau) et 'allergenes' (liste)."""
-                
-                try:
-                    # Tentative d'analyse
-                    if source == "Lien Web":
-                        response = model.generate_content(f"Analyse ce lien : {url_web}. {prompt}")
-                    else:
-                        img = Image.open(file_to_analyze)
-                        response = model.generate_content([prompt, img])
-                    
-                    # Extraction du texte JSON
-                    raw_text = response.text.strip()
-                    if "```json" in raw_text:
-                        raw_text = raw_text.split("```json")[1].split("```")[0]
-                    elif "```" in raw_text:
-                        raw_text = raw_text.split("```")[1].split("```")[0]
-                    
-                    res = json.loads(raw_text)
-                    res["livre"] = nom_livre_final
-                    
-                    # Sauvegarde
-                    safe_name = "".join([c for c in res['nom'] if c.isalnum() or c==' ']).rstrip()
-                    file_name = f"{safe_name.replace(' ', '_')}.json"
-                    with open(os.path.join(DB_PATH, file_name), "w") as f:
-                        json.dump(res, f)
-                    
-                    st.success(f"✅ '{res['nom']}' ajouté !")
-                    st.rerun()
-                    
-                except Exception as e:
-                    # Si gemini-1.5-flash a fait une 404, on tente le modèle Pro de secours
-                    st.warning("Tentative avec le modèle de secours...")
-                    try:
-                        fallback_model = genai.GenerativeModel('gemini-pro')
-                        if source == "Lien Web":
-                            response = fallback_model.generate_content(f"Lien : {url_web}. {prompt}")
-                            # (Note: gemini-pro ne gère pas les images, donc on ne teste que le lien ici)
-                            raw_text = response.text.strip()
-                            # ... (répéter le nettoyage JSON si besoin)
-                            st.info("Le modèle de secours a répondu !")
-                        else:
-                            st.error("Le modèle Flash est introuvable pour les images.")
-                    except:
-                        st.error(f"Erreur persistante : {e}")
-
-with tab2:
-    st.header("Filtrer mes recettes")
-    all_books = get_all_books()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        s_nom = st.text_input("🔍 Rechercher par nom")
-        s_ing = st.text_input("🍎 Rechercher un ingrédient")
-    with col2:
-        s_livre = st.multiselect("📖 Filtrer par Livre(s)", all_books)
-        s_type = st.multiselect("🍴 Type de plat", ["Entrée", "Plat", "Dessert", "Gâteau"])
-
-    st.divider()
-
-    if os.path.exists(DB_PATH):
-        files = [f for f in os.listdir(DB_PATH) if f.endswith('.json')]
-        for file in files:
-            with open(os.path.join(DB_PATH, file), 'r') as f:
-                r = json.load(f)
-                
-                match_nom = s_nom.lower() in r.get('nom', '').lower()
-                match_ing = not s_ing or any(s_ing.lower() in i.lower() for i in r.get('ingredients', []))
-                match_livre = not s_livre or r.get('livre') in s_livre
-                match_type = not s_type or r.get('type') in s_type
-                
-                if match_nom and match_ing and match_livre and match_type:
-                    with st.expander(f"{r.get('nom', 'Sans nom')} ({r.get('type', 'Plat')}) — {r.get('temps', '?')} min"):
-                        st.write(f"**Livre :** {r.get('livre', 'Non précisé')}")
-                        st.write(f"**Ingrédients :** {', '.join(r.get('ingredients', []))}")
-                        if r.get('allergenes'):
-                            st.warning(f"⚠️ Allergènes : {', '.join(r['allergenes'])}")
+# --- AFFICHAGE ---
+st.divider()
+if os.path.exists(DB_PATH):
+    for f in os.listdir(DB_PATH):
+        st.write(f"📖 {f}")
