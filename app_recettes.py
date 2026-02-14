@@ -42,7 +42,7 @@ def get_all_books():
 st.set_page_config(page_title="Ma Cuisine Pro", layout="wide")
 st.title("👩🏻‍🍳 Assistant Recettes Intelligent")
 
-tab1, tab2 = st.tabs(["📥 Importer une Recette", "🔍 Ma Bibliothèque"])
+tab1, tab2 = st.tabs(["🎂 Importer une Recette", "🔍 Ma Bibliothèque"])
 
 with tab1:
     source = st.radio("Source de la recette :", ["Lien Web", "Image / Photo"])
@@ -136,4 +136,5 @@ with tab2:
                                 for i, etape in enumerate(r.get('etapes', []), 1):
                                     st.write(f"{i}. {etape}")
             except: continue
+
 
