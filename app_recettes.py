@@ -5,9 +5,7 @@ import google.generativeai as genai
 from PIL import Image
 
 # --- CONFIGURATION GEMINI (GRATUIT) ---
-# On récupère la clé Zo-4 que tu as générée sur AI Studio
-try:
-    api_key = "AIzaSyBvvqOuMwFdgUH5T4GJlT0fS4i4Qnti8Gk"
+api_key = "AIzaSyBvvqOuMwFdgUH5T4GJlT0fS4i4Qnti8Gk"
 
 # --- CONFIGURATION GEMINI (FORCE) ---
 genai.configure(api_key=api_key)
@@ -128,6 +126,7 @@ with tab2:
                         st.write(f"**Ingrédients :** {', '.join(r['ingredients'])}")
                         if r.get('allergenes'):
                             st.warning(f"⚠️ Allergènes : {', '.join(r['allergenes'])}")
+
 
 
 
