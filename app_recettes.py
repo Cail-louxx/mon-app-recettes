@@ -18,7 +18,7 @@ genai.configure(api_key=api_key)
 # On tente de trouver le modèle par son nom court
 # C'est la syntaxe recommandée pour les versions récentes de google-generativeai
 try:
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-1.0-pro')
     # Test de sécurité : on force l'API v1beta si nécessaire
 except Exception:
     model = genai.GenerativeModel('models/gemini-1.5-flash')
@@ -131,5 +131,6 @@ with tab2:
                         st.write(f"**Ingrédients :** {', '.join(r['ingredients'])}")
                         if r.get('allergenes'):
                             st.warning(f"⚠️ Allergènes : {', '.join(r['allergenes'])}")
+
 
 
