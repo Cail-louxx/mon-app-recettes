@@ -7,9 +7,6 @@ from PIL import Image
 # --- CONFIGURATION GEMINI (GRATUIT) ---
 # On récupère la clé Zo-4 que tu as générée sur AI Studio
 try:
-    api_key = st.secrets["GEMINI_API_KEY"]
-except:
-    # Ta clé Zo-4 pour tes tests locaux
     api_key = "AIzaSyBvvqOuMwFdgUH5T4GJlT0fS4i4Qnti8Gk"
 
 # --- CONFIGURATION GEMINI (FORCE) ---
@@ -131,6 +128,7 @@ with tab2:
                         st.write(f"**Ingrédients :** {', '.join(r['ingredients'])}")
                         if r.get('allergenes'):
                             st.warning(f"⚠️ Allergènes : {', '.join(r['allergenes'])}")
+
 
 
 
