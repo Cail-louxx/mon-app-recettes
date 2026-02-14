@@ -10,7 +10,7 @@ try:
     api_key = st.secrets["GEMINI_API_KEY"]
 except:
     # Ta clé Zo-4 pour tes tests locaux
-    api_key = "AIzaSyDt209x24lHpOmY-GzBDJ5bNDoXH-hZo-4"
+    api_key = "AIzaSyBvvqOuMwFdgUH5T4GJlT0fS4i4Qnti8Gk"
 
 genai.configure(api_key=api_key)
 
@@ -126,3 +126,4 @@ with tab2:
                         st.write(f"**Ingrédients :** {', '.join(r['ingredients'])}")
                         if r.get('allergenes'):
                             st.warning(f"⚠️ Allergènes : {', '.join(r['allergenes'])}")
+
