@@ -84,4 +84,58 @@ with tab1:
                     res["livre"] = nom_livre_final
                     
                     # Sauvegarde
-                    safe_name = "".join([c for c in res['nom'] if c.isalnum() or c=='
+                    safe_name = "".join([c for c in res['nom'] if c.isalnum() or c==' ']).rstrip()
+                    file_name = f"{safe_name.replace(' ', '_')}.json"
+                    with open(os.path.join(DB_PATH, file_name), "w") as f:
+                        json.dump(res, f)
+                    
+                    st.success(f"✅ '{res['nom']}' ajouté !")
+                    st.rerun()
+                    
+                except Exception as e:
+                    # Si gemini-1.5-flash a fait une 404, on tente le modèle Pro de secours
+                    st.warning("Tentative avec le modèle de secours...")
+                    try:
+                        fallback_model = genai.GenerativeModel('gemini-pro')
+                        if source == "Lien Web":
+                            response = fallback_model.generate_content(f"Lien : {url_web}. {prompt}")
+                            # (Note: gemini-pro ne gère pas les images, donc on ne teste que le lien ici)
+                            raw_text = response.text.strip()
+                            # ... (répéter le nettoyage JSON si besoin)
+                            st.info("Le modèle de secours a répondu !")
+                        else:
+                            st.error("Le modèle Flash est introuvable pour les images.")
+                    except:
+                        st.error(f"Erreur persistante : {e}")
+
+with tab2:
+    st.header("Filtrer mes recettes")
+    all_books = get_all_books()
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        s_nom = st.text_input("🔍 Rechercher par nom")
+        s_ing = st.text_input("🍎 Rechercher un ingrédient")
+    with col2:
+        s_livre = st.multiselect("📖 Filtrer par Livre(s)", all_books)
+        s_type = st.multiselect("🍴 Type de plat", ["Entrée", "Plat", "Dessert", "Gâteau"])
+
+    st.divider()
+
+    if os.path.exists(DB_PATH):
+        files = [f for f in os.listdir(DB_PATH) if f.endswith('.json')]
+        for file in files:
+            with open(os.path.join(DB_PATH, file), 'r') as f:
+                r = json.load(f)
+                
+                match_nom = s_nom.lower() in r.get('nom', '').lower()
+                match_ing = not s_ing or any(s_ing.lower() in i.lower() for i in r.get('ingredients', []))
+                match_livre = not s_livre or r.get('livre') in s_livre
+                match_type = not s_type or r.get('type') in s_type
+                
+                if match_nom and match_ing and match_livre and match_type:
+                    with st.expander(f"{r.get('nom', 'Sans nom')} ({r.get('type', 'Plat')}) — {r.get('temps', '?')} min"):
+                        st.write(f"**Livre :** {r.get('livre', 'Non précisé')}")
+                        st.write(f"**Ingrédients :** {', '.join(r.get('ingredients', []))}")
+                        if r.get('allergenes'):
+                            st.warning(f"⚠️ Allergènes : {', '.join(r['allergenes'])}")
