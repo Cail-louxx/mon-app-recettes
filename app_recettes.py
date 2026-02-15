@@ -25,7 +25,6 @@ DB_PATH = "ma_base_recettes"
 if not os.path.exists(DB_PATH):
     os.makedirs(DB_PATH)
 
-# Liste officielle pour le filtrage et l'analyse
 LISTE_ALLERGENES = ["Gluten", "Lactose", "Fruits à coque", "Oeufs", "Poisson", "Crustacés", "Soja", "Arachides", "Moutarde", "Sésame"]
 
 # --- 3. FONCTIONS UTILES ---
@@ -61,11 +60,17 @@ with tab1:
     file_img = st.file_uploader("Choisir une image", type=['jpg', 'jpeg', 'png']) if source == "Image / Photo" else None
 
     if st.button("Analyser et Sauvegarder"):
-        with st.spinner("L'IA analyse les détails et allergènes..."):
-            prompt = f"""Analyse cette recette. Réponds UNIQUEMENT en JSON strict avec ces clés : 
-            'nom', 'ingredients' (liste), 'etapes' (liste détaillée), 'temps' (entier), 'personnes' (entier), 
+        with st.spinner("L'IA analyse les détails..."):
+            # PROMPT ULTRA-STRICT POUR LES PERSONNES ET ALLERGÈNES
+            prompt = f"""Analyse cette recette. Tu DOIS obligatoirement extraire le nombre de personnes.
+            Réponds UNIQUEMENT en JSON strict avec ces clés exactes : 
+            'nom', 
+            'ingredients' (liste), 
+            'etapes' (liste détaillée), 
+            'temps' (entier), 
+            'personnes' (entier obligatoire), 
             'type' (Entrée, Plat, Dessert, Gâteau ou Boisson),
-            'allergenes' (liste à puces à choisir PARMI CETTE LISTE UNIQUEMENT : {", ".join(LISTE_ALLERGENES)})."""
+            'allergenes' (liste à puces à choisir PARMI : {", ".join(LISTE_ALLERGENES)})."""
             
             try:
                 if source == "Lien Web":
@@ -78,6 +83,10 @@ with tab1:
                 res = json.loads(clean_text)
                 res["livre"] = nom_livre_final
                 
+                # Vérification de sécurité pour les clés manquantes
+                if "personnes" not in res: res["personnes"] = 4
+                if "allergenes" not in res: res["allergenes"] = []
+
                 safe_name = "".join([c for c in res.get('nom', 'recette') if c.isalnum()]).lower()
                 with open(os.path.join(DB_PATH, f"{safe_name}.json"), "w") as f:
                     json.dump(res, f)
@@ -96,8 +105,7 @@ with tab2:
     with c1: s_nom = st.text_input("🔍 Nom")
     with c2: s_ing = st.text_input("🍎 Ingrédient")
     with c3: s_type = st.multiselect("🍴 Type", ["Entrée", "Plat", "Dessert", "Gâteau", "Boisson"])
-    # NOUVEAU : Menu déroulant pour les allergènes
-    with c4: s_all = st.selectbox("⚠️ Allergène présent", ["Tous"] + LISTE_ALLERGENES)
+    with c4: s_no_all = st.selectbox("🚫 Exclure l'allergène", ["Aucun"] + LISTE_ALLERGENES)
     with c5: s_livre = st.multiselect("📖 Livres", all_books)
 
     st.divider()
@@ -109,20 +117,30 @@ with tab2:
                 with open(os.path.join(DB_PATH, file), 'r') as f:
                     r = json.load(f)
                     
-                    # Filtrage
+                    # LOGIQUE DE FILTRAGE
                     m_nom = s_nom.lower() in r.get('nom', '').lower()
                     m_ing = not s_ing or any(s_ing.lower() in i.lower() for i in r.get('ingredients', []))
                     m_type = not s_type or r.get('type') in s_type
                     m_livre = not s_livre or r.get('livre') in s_livre
-                    # Logique du filtre allergène
+                    
+                    # LOGIQUE INVERSÉE POUR LES ALLERGÈNES (Exclure si présent)
                     r_allergenes = r.get('allergenes', [])
-                    m_all = (s_all == "Tous") or (s_all in r_allergenes)
+                    if s_no_all == "Aucun":
+                        m_all = True
+                    else:
+                        m_all = s_no_all not in r_allergenes
                     
                     if m_nom and m_ing and m_type and m_all and m_livre:
-                        with st.expander(f"📖 {r.get('nom')} — {r.get('type')} — ⏱️ {r.get('temps')} min"):
+                        nom = r.get('nom', 'Sans nom')
+                        tps = r.get('temps', '?')
+                        pers = r.get('personnes', '?')
+                        
+                        with st.expander(f"📖 {nom} — 👥 {pers} pers — ⏱️ {tps} min"):
                             if r_allergenes:
-                                st.warning(f"⚠️ Allergènes : {', '.join(r_allergenes)}")
-                            
+                                st.warning(f"⚠️ Contient : {', '.join(r_allergenes)}")
+                            else:
+                                st.success("✅ Sans allergènes majeurs répertoriés")
+                                
                             col1, col2 = st.columns(2)
                             with col1:
                                 st.markdown("### 🍎 Ingrédients")
