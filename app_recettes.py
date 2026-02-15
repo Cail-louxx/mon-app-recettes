@@ -28,14 +28,12 @@ if not os.path.exists(DB_PATH):
 LISTE_ALLERGENES = ["Gluten", "Lactose", "Fruits à coque", "Oeufs", "Poisson", "Crustacés", "Soja", "Arachides", "Moutarde", "Sésame"]
 
 def format_temps(minutes):
-    """Convertit les minutes en format H:MM"""
+    """Convertit les minutes en format lisible HhMM"""
     try:
         m = int(minutes)
         if m < 60: return f"{m} min"
-        heures = m // 60
-        mins = m % 60
-        return f"{heures}h{mins:02d}"
-    except: return "?"
+        return f"{m // 60}h{m % 60:02d}"
+    except: return "Inconnu"
 
 def get_all_books():
     books = set()
@@ -51,7 +49,7 @@ def get_all_books():
 
 # --- 3. INTERFACE ---
 st.set_page_config(page_title="Ma Cuisine Pro MP2I", layout="wide")
-st.title("📚 Assistant Recettes - Précision Culinaire")
+st.title("📚 Assistant Recettes Haute Fidélité")
 
 tab1, tab2 = st.tabs(["📥 Importer", "🔍 Bibliothèque"])
 
@@ -69,23 +67,24 @@ with tab1:
     file_img = st.file_uploader("Image", type=['jpg', 'jpeg', 'png']) if source == "Image / Photo" else None
 
     if st.button("Analyser et Sauvegarder"):
-        with st.spinner("Analyse approfondie en cours..."):
-            # PROMPT AVEC CALCUL DU TEMPS ET RESPECT DES QUANTITÉS
-            prompt = f"""Tu es un expert culinaire. Analyse cette recette.
+        with st.spinner("Extraction visuelle en cours..."):
+            # PROMPT DE LECTURE STRICTE
+            prompt = f"""Tu es un scanner de texte culinaire ultra-précis. 
+            NE DEVINER AUCUNE DONNÉE. N'UTILISE PAS TES CONNAISSANCES GÉNÉRALES. 
+            Recopie uniquement ce que tu vois sur l'image ou le lien.
+
+            1. 'temps' : Somme (Préparation + Cuisson + Repos). Calcule le TOTAL en minutes.
+            2. 'personnes' : Nombre exact indiqué.
+            3. 'ingredients' : Recopie CHAQUE quantité et unité scrupuleusement (ex: '140g de sucre', '3 oeufs', '20 spéculoos').
+            4. 'allergenes' : Liste parmi {", ".join(LISTE_ALLERGENES)}.
             
-            CONSIGNES CRUCIALES :
-            1. 'temps' : Calcule la somme (Préparation + Cuisson + Repos/Attente). Donne uniquement le total en minutes.
-            2. 'ingredients' : Recopie EXACTEMENT les quantités et unités comme trouvées (ex: '3 oeufs', '1 pincée', '150g'). Ne change rien.
-            3. 'personnes' : Nombre de personnes.
-            4. 'allergenes' : Liste choisie PARMI : {", ".join(LISTE_ALLERGENES)}.
-            
-            Réponds UNIQUEMENT en JSON strict :
+            Format JSON attendu :
             {{
-                "nom": "nom",
+                "nom": "titre",
                 "ingredients": ["quantité + nom"],
-                "etapes": ["liste"],
-                "temps": 0,
-                "personnes": 0,
+                "etapes": ["déroulé"],
+                "temps": total_minutes,
+                "personnes": nombre,
                 "type": "Entrée, Plat, Dessert, Gâteau ou Boisson",
                 "allergenes": ["liste"]
             }}"""
@@ -131,27 +130,22 @@ with tab2:
                 with open(os.path.join(DB_PATH, file), 'r') as f:
                     r = json.load(f)
                     
-                    # Filtrage
-                    m_nom = s_nom.lower() in r.get('nom', '').lower()
-                    m_ing = not s_ing or any(s_ing.lower() in i.lower() for i in r.get('ingredients', []))
-                    m_type = not s_type or r.get('type') in s_type
-                    m_livre = not s_livre or r.get('livre') in s_livre
-                    m_all = (s_no_all == "Aucun") or (s_no_all not in r.get('allergenes', []))
-                    
-                    if m_nom and m_ing and m_type and m_all and m_livre:
-                        # Affichage du temps converti en H:MM
-                        tps_brut = r.get('temps', 0)
-                        tps_formate = format_temps(tps_brut)
+                    if s_nom.lower() in r.get('nom','').lower() and (not s_ing or any(s_ing.lower() in i.lower() for i in r.get('ingredients',[]))):
+                        # Filtrage allergènes et types
+                        m_type = not s_type or r.get('type') in s_type
+                        m_all = (s_no_all == "Aucun") or (s_no_all not in r.get('allergenes', []))
                         
-                        with st.expander(f"📖 {r.get('nom')} — 👥 {r.get('personnes')} pers — ⏱️ {tps_formate}"):
-                            if r.get('allergenes'):
-                                st.warning(f"⚠️ Contient : {', '.join(r.get('allergenes'))}")
+                        if m_type and m_all:
+                            tps_h = format_temps(r.get('temps', 0))
+                            with st.expander(f"📖 {r.get('nom')} — 👥 {r.get('personnes')} pers — ⏱️ {tps_h}"):
+                                if r.get('allergenes'):
+                                    st.warning(f"⚠️ Contient : {', '.join(r.get('allergenes'))}")
                                 
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                st.subheader("🍎 Ingrédients")
-                                for ing in r.get('ingredients', []): st.write(f"- {ing}")
-                            with col2:
-                                st.subheader("👨‍🍳 Préparation")
-                                for i, etape in enumerate(r.get('etapes', []), 1): st.write(f"{i}. {etape}")
+                                col1, col2 = st.columns(2)
+                                with col1:
+                                    st.subheader("🍎 Ingrédients")
+                                    for ing in r.get('ingredients', []): st.write(f"- {ing}")
+                                with col2:
+                                    st.subheader("👨‍🍳 Préparation")
+                                    for i, etape in enumerate(r.get('etapes', []), 1): st.write(f"{i}. {etape}")
             except: continue
