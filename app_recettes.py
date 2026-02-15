@@ -20,10 +20,13 @@ def get_working_model_name():
 target_model_name = get_working_model_name()
 model = genai.GenerativeModel(target_model_name)
 
-# --- 2. SETUP DOSSIER ---
+# --- 2. SETUP DOSSIER & LISTES ---
 DB_PATH = "ma_base_recettes"
 if not os.path.exists(DB_PATH):
     os.makedirs(DB_PATH)
+
+# Liste officielle pour le filtrage et l'analyse
+LISTE_ALLERGENES = ["Gluten", "Lactose", "Fruits à coque", "Oeufs", "Poisson", "Crustacés", "Soja", "Arachides", "Moutarde", "Sésame"]
 
 # --- 3. FONCTIONS UTILES ---
 def get_all_books():
@@ -59,15 +62,10 @@ with tab1:
 
     if st.button("Analyser et Sauvegarder"):
         with st.spinner("L'IA analyse les détails et allergènes..."):
-            # PROMPT RENFORCÉ POUR LE TYPE ET LES ALLERGÈNES
-            prompt = """Analyse cette recette très précisément. Réponds UNIQUEMENT en JSON strict avec ces clés exactes : 
-            'nom', 
-            'ingredients' (liste), 
-            'etapes' (liste détaillée), 
-            'temps' (entier en minutes), 
-            'personnes' (entier), 
-            'type' (OBLIGATOIRE : choisir entre Entrée, Plat, Dessert, Gâteau ou Boisson),
-            'allergenes' (OBLIGATOIRE : liste des allergènes présents comme Gluten, Lactose, Fruits à coque, Oeufs, etc. Mets une liste vide [] si aucun)."""
+            prompt = f"""Analyse cette recette. Réponds UNIQUEMENT en JSON strict avec ces clés : 
+            'nom', 'ingredients' (liste), 'etapes' (liste détaillée), 'temps' (entier), 'personnes' (entier), 
+            'type' (Entrée, Plat, Dessert, Gâteau ou Boisson),
+            'allergenes' (liste à puces à choisir PARMI CETTE LISTE UNIQUEMENT : {", ".join(LISTE_ALLERGENES)})."""
             
             try:
                 if source == "Lien Web":
@@ -84,29 +82,22 @@ with tab1:
                 with open(os.path.join(DB_PATH, f"{safe_name}.json"), "w") as f:
                     json.dump(res, f)
                 
-                st.success(f"✅ Recette '{res.get('nom')}' analysée avec succès !")
-                
-                json_string = json.dumps(res, indent=4)
-                st.download_button(
-                    label="💾 Télécharger pour GitHub",
-                    data=json_string,
-                    file_name=f"{safe_name}.json",
-                    mime="application/json"
-                )
+                st.success(f"✅ Recette '{res.get('nom')}' prête !")
+                st.download_button(label="💾 Télécharger pour GitHub", data=json.dumps(res, indent=4), file_name=f"{safe_name}.json", mime="application/json")
                 
             except Exception as e:
-                st.error(f"Erreur d'analyse : {e}")
+                st.error(f"Erreur : {e}")
 
 with tab2:
     st.header("Filtrer mes recettes")
     all_books = get_all_books()
     
-    # CRITÈRES DE SÉLECTION COMPLETS
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1: s_nom = st.text_input("🔍 Nom")
     with c2: s_ing = st.text_input("🍎 Ingrédient")
     with c3: s_type = st.multiselect("🍴 Type", ["Entrée", "Plat", "Dessert", "Gâteau", "Boisson"])
-    with c4: s_all = st.text_input("⚠️ Allergène")
+    # NOUVEAU : Menu déroulant pour les allergènes
+    with c4: s_all = st.selectbox("⚠️ Allergène présent", ["Tous"] + LISTE_ALLERGENES)
     with c5: s_livre = st.multiselect("📖 Livres", all_books)
 
     st.divider()
@@ -118,26 +109,19 @@ with tab2:
                 with open(os.path.join(DB_PATH, file), 'r') as f:
                     r = json.load(f)
                     
-                    # Logique de filtrage avancée
+                    # Filtrage
                     m_nom = s_nom.lower() in r.get('nom', '').lower()
                     m_ing = not s_ing or any(s_ing.lower() in i.lower() for i in r.get('ingredients', []))
                     m_type = not s_type or r.get('type') in s_type
-                    m_all = not s_all or any(s_all.lower() in a.lower() for a in r.get('allergenes', []))
                     m_livre = not s_livre or r.get('livre') in s_livre
+                    # Logique du filtre allergène
+                    r_allergenes = r.get('allergenes', [])
+                    m_all = (s_all == "Tous") or (s_all in r_allergenes)
                     
                     if m_nom and m_ing and m_type and m_all and m_livre:
-                        nom = r.get('nom', 'Sans nom')
-                        tps = r.get('temps', '?')
-                        pers = r.get('personnes', '?')
-                        r_type = r.get('type', 'Plat')
-                        
-                        with st.expander(f"📖 {nom} — {r_type} — ⏱️ {tps} min — 👥 {pers} pers"):
-                            # Affichage des allergènes en warning si présents
-                            allergenes = r.get('allergenes', [])
-                            if allergenes:
-                                st.warning(f"⚠️ Allergènes : {', '.join(allergenes)}")
-                            
-                            st.write(f"**Livre :** {r.get('livre', 'Non classé')}")
+                        with st.expander(f"📖 {r.get('nom')} — {r.get('type')} — ⏱️ {r.get('temps')} min"):
+                            if r_allergenes:
+                                st.warning(f"⚠️ Allergènes : {', '.join(r_allergenes)}")
                             
                             col1, col2 = st.columns(2)
                             with col1:
@@ -147,4 +131,3 @@ with tab2:
                                 st.markdown("### 👨‍🍳 Étapes")
                                 for i, etape in enumerate(r.get('etapes', []), 1): st.write(f"{i}. {etape}")
             except: continue
-
