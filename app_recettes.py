@@ -5,7 +5,7 @@ import google.generativeai as genai
 from PIL import Image
 
 # --- 1. CONFIGURATION ---
-api_key = st.secrets["GEMINI_API_KEY"]
+api_key = "AIzaSyBvvqOuMwFdgUH5T4GJlT0fS4i4Qnti8Gk"
 genai.configure(api_key=api_key)
 
 @st.cache_resource
@@ -40,7 +40,7 @@ def get_all_books():
 
 # --- 4. INTERFACE ---
 st.set_page_config(page_title="Ma Cuisine Pro MP2I", layout="wide")
-st.title("📚 Mon Assistant Recettes Persistant")
+st.title("📚 Assistant Recettes Expert")
 
 tab1, tab2 = st.tabs(["📥 Importer une Recette", "🔍 Ma Bibliothèque"])
 
@@ -54,14 +54,20 @@ with tab1:
     with col_book2:
         nom_livre_final = st.text_input("Nom du livre", value="Mes Recettes") if book_option == "+ Nouveau Livre" else book_option
 
-    url_web = st.text_input("Lien de la recette") if source == "Lien Web" else None
+    url_web = st.text_input("Coller le lien de la recette") if source == "Lien Web" else None
     file_img = st.file_uploader("Choisir une image", type=['jpg', 'jpeg', 'png']) if source == "Image / Photo" else None
 
     if st.button("Analyser et Sauvegarder"):
-        with st.spinner("L'IA analyse la recette complète..."):
-            prompt = """Analyse cette recette. Réponds UNIQUEMENT en JSON strict avec ces clés exactes : 
-            'nom', 'ingredients' (liste), 'etapes' (liste détaillée), 'temps' (entier en minutes), 
-            'personnes' (entier), 'type' (Entrée, Plat ou Dessert)."""
+        with st.spinner("L'IA analyse les détails et allergènes..."):
+            # PROMPT RENFORCÉ POUR LE TYPE ET LES ALLERGÈNES
+            prompt = """Analyse cette recette très précisément. Réponds UNIQUEMENT en JSON strict avec ces clés exactes : 
+            'nom', 
+            'ingredients' (liste), 
+            'etapes' (liste détaillée), 
+            'temps' (entier en minutes), 
+            'personnes' (entier), 
+            'type' (OBLIGATOIRE : choisir entre Entrée, Plat, Dessert, Gâteau ou Boisson),
+            'allergenes' (OBLIGATOIRE : liste des allergènes présents comme Gluten, Lactose, Fruits à coque, Oeufs, etc. Mets une liste vide [] si aucun)."""
             
             try:
                 if source == "Lien Web":
@@ -74,15 +80,12 @@ with tab1:
                 res = json.loads(clean_text)
                 res["livre"] = nom_livre_final
                 
-                # Sauvegarde temporaire (pour la session actuelle)
                 safe_name = "".join([c for c in res.get('nom', 'recette') if c.isalnum()]).lower()
                 with open(os.path.join(DB_PATH, f"{safe_name}.json"), "w") as f:
                     json.dump(res, f)
                 
-                st.success(f"✅ Recette '{res.get('nom')}' analysée !")
+                st.success(f"✅ Recette '{res.get('nom')}' analysée avec succès !")
                 
-                # --- NOUVEAU : BOUTON DE SAUVEGARDE POUR GITHUB ---
-                st.warning("⚠️ Pour ne pas perdre cette recette au prochain réveil de l'app, téléchargez-la et déposez-la dans votre dossier GitHub.")
                 json_string = json.dumps(res, indent=4)
                 st.download_button(
                     label="💾 Télécharger pour GitHub",
@@ -92,17 +95,19 @@ with tab1:
                 )
                 
             except Exception as e:
-                st.error(f"Erreur : {e}")
+                st.error(f"Erreur d'analyse : {e}")
 
 with tab2:
     st.header("Filtrer mes recettes")
     all_books = get_all_books()
     
-    c1, c2, c3, c4 = st.columns(4)
+    # CRITÈRES DE SÉLECTION COMPLETS
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1: s_nom = st.text_input("🔍 Nom")
     with c2: s_ing = st.text_input("🍎 Ingrédient")
-    with c3: s_livre = st.multiselect("📖 Livres", all_books)
-    with c4: s_type = st.multiselect("🍴 Type", ["Entrée", "Plat", "Dessert"])
+    with c3: s_type = st.multiselect("🍴 Type", ["Entrée", "Plat", "Dessert", "Gâteau", "Boisson"])
+    with c4: s_all = st.text_input("⚠️ Allergène")
+    with c5: s_livre = st.multiselect("📖 Livres", all_books)
 
     st.divider()
 
@@ -112,10 +117,28 @@ with tab2:
             try:
                 with open(os.path.join(DB_PATH, file), 'r') as f:
                     r = json.load(f)
-                    if s_nom.lower() in r.get('nom','').lower() and (not s_ing or any(s_ing.lower() in i.lower() for i in r.get('ingredients',[]))):
-                        nom, tps, pers = r.get('nom','?'), r.get('temps','?'), r.get('personnes','?')
-                        with st.expander(f"📖 {nom} — ⏱️ {tps} min — 👥 {pers} pers"):
-                            st.write(f"**Livre :** {r.get('livre')}")
+                    
+                    # Logique de filtrage avancée
+                    m_nom = s_nom.lower() in r.get('nom', '').lower()
+                    m_ing = not s_ing or any(s_ing.lower() in i.lower() for i in r.get('ingredients', []))
+                    m_type = not s_type or r.get('type') in s_type
+                    m_all = not s_all or any(s_all.lower() in a.lower() for a in r.get('allergenes', []))
+                    m_livre = not s_livre or r.get('livre') in s_livre
+                    
+                    if m_nom and m_ing and m_type and m_all and m_livre:
+                        nom = r.get('nom', 'Sans nom')
+                        tps = r.get('temps', '?')
+                        pers = r.get('personnes', '?')
+                        r_type = r.get('type', 'Plat')
+                        
+                        with st.expander(f"📖 {nom} — {r_type} — ⏱️ {tps} min — 👥 {pers} pers"):
+                            # Affichage des allergènes en warning si présents
+                            allergenes = r.get('allergenes', [])
+                            if allergenes:
+                                st.warning(f"⚠️ Allergènes : {', '.join(allergenes)}")
+                            
+                            st.write(f"**Livre :** {r.get('livre', 'Non classé')}")
+                            
                             col1, col2 = st.columns(2)
                             with col1:
                                 st.markdown("### 🍎 Ingrédients")
