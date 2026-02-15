@@ -5,7 +5,7 @@ import google.generativeai as genai
 from PIL import Image
 
 # --- 1. CONFIGURATION ---
-api_key = "AIzaSyBvvqOuMwFdgUH5T4GJlT0fS4i4Qnti8Gk"
+api_key = st.secrets["GEMINI_API_KEY"]
 genai.configure(api_key=api_key)
 
 @st.cache_resource
