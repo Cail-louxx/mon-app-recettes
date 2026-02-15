@@ -27,6 +27,16 @@ if not os.path.exists(DB_PATH):
 
 LISTE_ALLERGENES = ["Gluten", "Lactose", "Fruits à coque", "Oeufs", "Poisson", "Crustacés", "Soja", "Arachides", "Moutarde", "Sésame"]
 
+def format_temps(minutes):
+    """Convertit les minutes en format H:MM"""
+    try:
+        m = int(minutes)
+        if m < 60: return f"{m} min"
+        heures = m // 60
+        mins = m % 60
+        return f"{heures}h{mins:02d}"
+    except: return "?"
+
 def get_all_books():
     books = set()
     if os.path.exists(DB_PATH):
@@ -41,7 +51,7 @@ def get_all_books():
 
 # --- 3. INTERFACE ---
 st.set_page_config(page_title="Ma Cuisine Pro MP2I", layout="wide")
-st.title("📚 Assistant Recettes Haute Précision")
+st.title("📚 Assistant Recettes - Précision Culinaire")
 
 tab1, tab2 = st.tabs(["📥 Importer", "🔍 Bibliothèque"])
 
@@ -60,18 +70,19 @@ with tab1:
 
     if st.button("Analyser et Sauvegarder"):
         with st.spinner("Analyse approfondie en cours..."):
-            # PROMPT RENFORCÉ POUR LA PRÉCISION DES CHIFFRES
-            prompt = f"""Tu es un expert culinaire. Analyse cette recette avec une attention particulière aux chiffres.
+            # PROMPT AVEC CALCUL DU TEMPS ET RESPECT DES QUANTITÉS
+            prompt = f"""Tu es un expert culinaire. Analyse cette recette.
             
-            CONSIGNES STRICTES :
-            1. 'temps' : Calcule le TOTAL (préparation + cuisson + repos) en minutes. Ne renvoie qu'un nombre entier.
-            2. 'personnes' : Trouve pour combien de personnes est la recette. Si non précisé, mets 4.
-            3. 'allergenes' : Identifie-les PARMI : {", ".join(LISTE_ALLERGENES)}.
+            CONSIGNES CRUCIALES :
+            1. 'temps' : Calcule la somme (Préparation + Cuisson + Repos/Attente). Donne uniquement le total en minutes.
+            2. 'ingredients' : Recopie EXACTEMENT les quantités et unités comme trouvées (ex: '3 oeufs', '1 pincée', '150g'). Ne change rien.
+            3. 'personnes' : Nombre de personnes.
+            4. 'allergenes' : Liste choisie PARMI : {", ".join(LISTE_ALLERGENES)}.
             
             Réponds UNIQUEMENT en JSON strict :
             {{
-                "nom": "nom de la recette",
-                "ingredients": ["liste"],
+                "nom": "nom",
+                "ingredients": ["quantité + nom"],
                 "etapes": ["liste"],
                 "temps": 0,
                 "personnes": 0,
@@ -94,7 +105,7 @@ with tab1:
                 with open(os.path.join(DB_PATH, f"{safe_name}.json"), "w") as f:
                     json.dump(res, f)
                 
-                st.success(f"✅ '{res.get('nom')}' prêt (Analysé pour {res.get('personnes')} pers.)")
+                st.success(f"✅ '{res.get('nom')}' prêt !")
                 st.download_button("💾 Télécharger pour GitHub", data=json.dumps(res, indent=4), file_name=f"{safe_name}.json", mime="application/json")
                 
             except Exception as e:
@@ -120,7 +131,7 @@ with tab2:
                 with open(os.path.join(DB_PATH, file), 'r') as f:
                     r = json.load(f)
                     
-                    # Logique de filtrage
+                    # Filtrage
                     m_nom = s_nom.lower() in r.get('nom', '').lower()
                     m_ing = not s_ing or any(s_ing.lower() in i.lower() for i in r.get('ingredients', []))
                     m_type = not s_type or r.get('type') in s_type
@@ -128,11 +139,13 @@ with tab2:
                     m_all = (s_no_all == "Aucun") or (s_no_all not in r.get('allergenes', []))
                     
                     if m_nom and m_ing and m_type and m_all and m_livre:
-                        with st.expander(f"📖 {r.get('nom')} — 👥 {r.get('personnes')} pers — ⏱️ {r.get('temps')} min"):
+                        # Affichage du temps converti en H:MM
+                        tps_brut = r.get('temps', 0)
+                        tps_formate = format_temps(tps_brut)
+                        
+                        with st.expander(f"📖 {r.get('nom')} — 👥 {r.get('personnes')} pers — ⏱️ {tps_formate}"):
                             if r.get('allergenes'):
                                 st.warning(f"⚠️ Contient : {', '.join(r.get('allergenes'))}")
-                            else:
-                                st.success("✅ Garanti sans l'allergène exclu")
                                 
                             col1, col2 = st.columns(2)
                             with col1:
