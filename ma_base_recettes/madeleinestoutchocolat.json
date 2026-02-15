@@ -1,0 +1,28 @@
+{
+    "nom": "Madeleines tout chocolat",
+    "ingredients": [
+        "120g de Chocolat noir pâtissier",
+        "90g de Beurre",
+        "100g de Sucre",
+        "3 Œufs",
+        "110g de Farine",
+        "½ sachet de Levure chimique"
+    ],
+    "etapes": [
+        "Mélangez les œufs, le sucre, la farine et la levure.",
+        "Faites fondre le beurre et le chocolat séparément, puis incorporez-les au mélange précédent.",
+        "Placez la pâte 30 min au frais.",
+        "Préchauffez le four à 220 °C.",
+        "Versez la pâte dans des moules.",
+        "Enfournez pour 5 min, puis baissez la température à 200 °C et poursuivez la cuisson 7 min."
+    ],
+    "temps": 57,
+    "personnes": 20,
+    "type": "Gâteau",
+    "allergenes": [
+        "Gluten",
+        "Lactose",
+        "Oeufs"
+    ],
+    "livre": "Marmiton 365"
+}
