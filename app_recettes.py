@@ -3,6 +3,7 @@ import os
 import json
 import google.generativeai as genai
 from PIL import Image
+import re
 
 # --- 1. CONFIGURATION ---
 api_key = st.secrets["GEMINI_API_KEY"]
@@ -28,7 +29,6 @@ if not os.path.exists(DB_PATH):
 LISTE_ALLERGENES = ["Gluten", "Lactose", "Fruits à coque", "Oeufs", "Poisson", "Crustacés", "Soja", "Arachides", "Moutarde", "Sésame"]
 
 def format_temps(minutes):
-    """Convertit les minutes en format lisible HhMM"""
     try:
         m = int(minutes)
         if m < 60: return f"{m} min"
@@ -68,7 +68,6 @@ with tab1:
 
     if st.button("Analyser et Sauvegarder"):
         with st.spinner("Extraction visuelle en cours..."):
-            # PROMPT DE LECTURE STRICTE
             prompt = f"""Tu es un scanner de texte culinaire ultra-précis. 
             NE DEVINER AUCUNE DONNÉE. N'UTILISE PAS TES CONNAISSANCES GÉNÉRALES. 
             Recopie uniquement ce que tu vois sur l'image ou le lien.
@@ -78,16 +77,7 @@ with tab1:
             3. 'ingredients' : Recopie CHAQUE quantité et unité scrupuleusement (ex: '140g de sucre', '3 oeufs', '20 spéculoos').
             4. 'allergenes' : Liste parmi {", ".join(LISTE_ALLERGENES)}.
             
-            Format JSON attendu :
-            {{
-                "nom": "titre",
-                "ingredients": ["quantité + nom"],
-                "etapes": ["déroulé"],
-                "temps": total_minutes,
-                "personnes": nombre,
-                "type": "Entrée, Plat, Dessert, Gâteau ou Boisson",
-                "allergenes": ["liste"]
-            }}"""
+            Réponds EXCLUSIVEMENT sous forme d'objet JSON valide."""
             
             try:
                 if source == "Lien Web":
@@ -96,8 +86,18 @@ with tab1:
                     img = Image.open(file_img)
                     response = model.generate_content([prompt, img])
                 
-                clean_text = response.text.replace('```json', '').replace('```', '').strip()
-                res = json.loads(clean_text)
+                # NETTOYAGE ROBUSTE DU JSON
+                raw_text = response.text
+                # On cherche ce qui est entre les premières et dernières accolades
+                match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+                if match:
+                    json_str = match.group()
+                    # Suppression des virgules traînantes avant une fermeture de crochet ou d'accolade
+                    json_str = re.sub(r',\s*([\]}])', r'\1', json_str)
+                    res = json.loads(json_str)
+                else:
+                    raise ValueError("L'IA n'a pas renvoyé un format JSON valide.")
+
                 res["livre"] = nom_livre_final
                 
                 safe_name = "".join([c for c in res.get('nom', 'recette') if c.isalnum()]).lower()
@@ -105,7 +105,7 @@ with tab1:
                     json.dump(res, f)
                 
                 st.success(f"✅ '{res.get('nom')}' prêt !")
-                st.download_button("💾 Télécharger pour GitHub", data=json.dumps(res, indent=4), file_name=f"{safe_name}.json", mime="application/json")
+                st.download_button("💾 Télécharger pour GitHub", data=json.dumps(res, indent=4, ensure_ascii=False), file_name=f"{safe_name}.json", mime="application/json")
                 
             except Exception as e:
                 st.error(f"Erreur d'analyse : {e}")
@@ -127,17 +127,16 @@ with tab2:
         files = [f for f in os.listdir(DB_PATH) if f.endswith('.json')]
         for file in files:
             try:
-                with open(os.path.join(DB_PATH, file), 'r') as f:
+                with open(os.path.join(DB_PATH, file), 'r', encoding='utf-8') as f:
                     r = json.load(f)
                     
                     if s_nom.lower() in r.get('nom','').lower() and (not s_ing or any(s_ing.lower() in i.lower() for i in r.get('ingredients',[]))):
-                        # Filtrage allergènes et types
                         m_type = not s_type or r.get('type') in s_type
                         m_all = (s_no_all == "Aucun") or (s_no_all not in r.get('allergenes', []))
                         
                         if m_type and m_all:
                             tps_h = format_temps(r.get('temps', 0))
-                            with st.expander(f"📖 {r.get('nom')} — 👥 {r.get('personnes')} pers — ⏱️ {tps_h}"):
+                            with st.expander(f"📖 {r.get('nom')} — 👥 {r.get('personnes', '?')} pers — ⏱️ {tps_h}"):
                                 if r.get('allergenes'):
                                     st.warning(f"⚠️ Contient : {', '.join(r.get('allergenes'))}")
                                 
